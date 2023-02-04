@@ -189,3 +189,82 @@ mod date {
         }
     }
 }
+
+mod style_date_picker {
+    /**
+     *
+     */
+    use iced_native::{Background, Color};
+    use iced_style::Theme;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Appearance {
+        pub background: Background,
+        pub border_radius: f32,
+        pub border_width: f32,
+        pub border_color: Color,
+        pub text_color: Color,
+        pub text_attenuated_color: Color,
+        pub day_background: Background,
+    }
+
+    pub trait StyleSheet {
+        type Style: std::default::Default + Copy;
+
+        fn active(&self, style: Self::Style) -> Appearance;
+        fn selected(&self, style: Self::Style) -> Appearance;
+        fn hovered(&self, style: Self::Style) -> Appearance;
+        fn focused(&self, style: Self::Style) -> Appearance;
+    }
+
+    pub struct Default;
+
+    impl StyleSheet for Theme {
+        type Style = Default;
+
+        fn active(&self, _style: Self::Style) -> Appearance {
+            let palette = self.extended_palette();
+            let foreground = self.palette();
+    
+            Appearance {
+                background: palette.background.base.color.into(),
+                border_radius: 15.0,
+                border_width: 1.0,
+                border_color: foreground.text,
+                text_color: foreground.text,
+                text_attenuated_color: Color {
+                    a: foreground.text.a * 0.5,
+                    ..foreground.text
+                },
+                day_background: palette.background.base.color.into(),
+            }
+        }
+        
+        fn selected(&self, style: Self::Style) -> Appearance {
+            let palette = self.extended_palette();
+    
+            Appearance {
+                day_background: palette.primary.strong.color.into(),
+                text_color: palette.primary.strong.text,
+                ..self.active(style)
+            }
+        }
+
+        fn hovered(&self, style: Self::Style) -> Appearance {
+            let palette = self.extended_palette();
+    
+            Appearance {
+                day_background: palette.primary.weak.color.into(),
+                text_color: palette.primary.weak.text,
+                ..self.active(style)
+            }
+        }
+
+        fn focused(&self, style: Self::Style) -> Appearance {
+            Appearance {
+                border_color: Color::from_rgb(0.5, 0.5, 0.5),
+                ..self.active(style)
+            }
+        }
+    }
+}
