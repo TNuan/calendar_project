@@ -2,10 +2,9 @@
 use chrono::prelude::*;
 use iced::{
     alignment,
-    widget::{column, container, row, text, Button, Column, Container, Row, Text, button, horizontal_space},
+    widget::{column, container, row, text, Button, Column, Container, Row, Text, button, horizontal_space, text_input},
     Application, Background, Color, Command, Element, Length, Sandbox, Settings, color, theme, Alignment,
 };
-use iced_graphics::Primitive;
 use iced_native::{Layout, renderer::BorderRadius, widget::scrollable::style};
 
 use iced_aw::{Card, Modal};
@@ -85,9 +84,10 @@ impl Date {
 struct State {
     date: Date,
     events: Vec<Event>,
-
+    show_modal: bool,
     saving: bool,
     dirty: bool,
+    input_value: String,
 }
 
 
@@ -112,6 +112,8 @@ struct Event {
 enum Message {
     TitleInputChanged(String),
     CreateEvent,
+    OpenModal,
+    CloseModal,
     EventMessage(usize, EventMessage),
     NextMonth,
     PrevMonth,
@@ -134,8 +136,10 @@ impl Sandbox for CalendarApp {
         CalendarApp::Loaded(State {
             date: Date::today(),
             events: vec![],
+            show_modal: false,
             saving: true,
             dirty: false,
+            input_value: String::from(""),
         })
     }
 
@@ -158,9 +162,16 @@ impl Sandbox for CalendarApp {
                             state.date.month = state.date.month + 1;
                         }
                     }
-                    Message::TitleInputChanged(_) => todo!(),
+                    Message::TitleInputChanged(_) => {},
                     Message::CreateEvent => {
-
+                        //create event 
+                        state.show_modal = false;
+                    },
+                    Message::OpenModal => {
+                        state.show_modal = true;
+                    },
+                    Message::CloseModal => {
+                        state.show_modal = false;
                     },
                     Message::EventMessage(_, _) => todo!(),
                     Message::PrevMonth => {
@@ -179,7 +190,7 @@ impl Sandbox for CalendarApp {
     fn view(&self) -> Element<Message> {
         match self {
             CalendarApp::Loading => loading_message(),
-            CalendarApp::Loaded(State { date, events, .. }) => {
+            CalendarApp::Loaded(State { date, events, show_modal, input_value,  .. }) => {
                 let dt = Utc.ymd(date.year, date.month, date.day);
 
                 let month_start_day = Utc.ymd(date.year, date.month, 1).weekday().num_days_from_sunday();
@@ -208,7 +219,7 @@ impl Sandbox for CalendarApp {
                     .width(Length::Fill)
                     .horizontal_alignment(alignment::Horizontal::Center);
 
-                let header = view_controls(month_text, year_text);
+                let header = view_controls(month_text, year_text, *show_modal, input_value.to_string());
 
                 // Create a header for the weekdays name
                 let mut weekday = Row::new();
@@ -222,7 +233,7 @@ impl Sandbox for CalendarApp {
                     // Wrap the Text widget in a Container with a background color and padding
                     let container = Container::new(text)
                         .width(Length::Fill)
-                        .height(Length::Units(30))
+                        .height(Length::Fixed(30.0))
                         .center_x()
                         .center_y()
                         .padding(5)
@@ -230,10 +241,6 @@ impl Sandbox for CalendarApp {
 
                     weekday = weekday.push(container);
                 }
-
-                for day_event in 1..days {
-
-                } 
 
                 let mut day_current_month = Column::new();
 
@@ -267,7 +274,7 @@ impl Sandbox for CalendarApp {
                                 ]
                             ])
                             .width(Length::Fill)
-                            .height(Length::Units(120))
+                            .height(Length::Fixed(120.0))
                             .center_x()
                             // .center_y()
                             .padding(5)
@@ -276,7 +283,7 @@ impl Sandbox for CalendarApp {
                         } else {
                             week = week.push(Container::new("")
                             .width(Length::Fill)
-                            .height(Length::Units(120))
+                            .height(Length::Fixed(120.0))
                             .center_x()
                             // .center_y()
                             .padding(5)
@@ -298,7 +305,13 @@ impl Sandbox for CalendarApp {
     }
 }
 
-fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>) -> Element<'a, Message> {
+fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool, input_value: String,) -> Element<'a, Message> {
+    let create_event_btn = Container::new(
+        Row::new()
+            .spacing(10)
+            .align_items(Alignment::Center)
+            .push(Button::new(Text::new("Create event")).on_press(Message::OpenModal)));
+
     column![
         row![
             // horizontal_space(Length::Fill),
@@ -310,11 +323,45 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>) -> Element<'a, M
             .align_items(Alignment::Center),
             horizontal_space(Length::Fill),
             row![
-                button("Create new event")
-                    .on_press(Message::CreateEvent)
+                Modal::new(show_modal, create_event_btn, move ||  {
+                        Card::new(
+                            Text::new("My modal"),
+                            text_input(
+                                "What needs to be done?",
+                                &input_value,
+                                Message::TitleInputChanged,
+                            )
+                        )
+                        .foot(
+                            Row::new()
+                                .spacing(10)
+                                .padding(5)
+                                .width(Length::Fill)
+                                .push(
+                                    Button::new(Text::new("Cancel").horizontal_alignment(alignment::Horizontal::Center))
+                                        .width(Length::Fill)
+                                        .on_press(Message::CloseModal),
+                                )
+                                .push(
+                                    Button::new(Text::new("Ok").horizontal_alignment(alignment::Horizontal::Center))
+                                        .width(Length::Fill)
+                                        .on_press(Message::CreateEvent),
+                                ),
+                        )
+                        .max_width(300.0)
+                        // .width(Length::Shrink)
+                        .on_close(Message::CloseModal)
+                        .into()
+                    }
+                )
+                .backdrop(Message::CloseModal)
+                .on_esc(Message::CloseModal)
+                // .into()
             ]
             .width(Length::Fill)
-            .align_items(Alignment::Center),
+            .align_items(Alignment::Center)
+        
+            ,
             horizontal_space(Length::Fill)
         ]
         .width(Length::Fill)
@@ -332,80 +379,6 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>) -> Element<'a, M
         .align_items(Alignment::Center)
         .width(Length::Fill)
     ].into()
-}
-
-#[derive(Default)]
-struct ModalEvent {
-    show_modal: bool,
-    last_message: Option<MessageModal>
-}
-
-#[derive(Clone, Debug)]
-enum MessageModal {
-    OpenModal,
-    CloseModal,
-    CancelButtonPressed,
-    OkButtonPressed,
-}
-
-impl ModalEvent {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn update(&mut self, message: MessageModal) {
-        match message {
-            MessageModal::OpenModal => self.show_modal = true,
-            MessageModal::CloseModal => self.show_modal = false,
-            MessageModal::CancelButtonPressed => self.show_modal = false,
-            MessageModal::OkButtonPressed => self.show_modal = false,
-        }
-        self.last_message = Some(message)
-    }
-
-    // fn view(&self) -> Element<MessageModal> {
-    //     let content = Container::new(
-    //         Row::new()
-    //             .spacing(10)
-    //             .align_items(Alignment::Center)
-    //             .push(Button::new(Text::new("Open modal!")).on_press(MessageModal::OpenModal))
-    //     );
-
-    //     let card = Card::new(
-    //         Text::new("Create a new event"),
-    //         text_input()
-    //     )
-
-    //     let modal = Modal::new(self.show_modal, content, || {
-    //         Card::new(
-    //             Text::new("My modal"),
-    //             Text::new("This is a modal!"), //Text::new("Zombie ipsum reversus ab viral inferno, nam rick grimes malum cerebro. De carne lumbering animata corpora quaeritis. Summus brains sit​​, morbo vel maleficia? De apocalypsi gorger omero undead survivor dictum mauris. Hi mindless mortuis soulless creaturas, imo evil stalking monstra adventus resi dentevil vultus comedat cerebella viventium. Qui animated corpse, cricket bat max brucks terribilem incessu zomby. The voodoo sacerdos flesh eater, suscitat mortuos comedere carnem virus. Zonbi tattered for solum oculi eorum defunctis go lum cerebro. Nescio brains an Undead zombies. Sicut malus putrid voodoo horror. Nigh tofth eliv ingdead.")
-    //         )
-    //         .foot(
-    //             Row::new()
-    //                 .spacing(10)
-    //                 .padding(5)
-    //                 .width(Length::Fill)
-    //                 .push(
-    //                     Button::new(Text::new("Cancel").horizontal_alignment(Horizontal::Center))
-    //                         .width(Length::Fill)
-    //                         .on_press(Message::CancelButtonPressed),
-    //                 )
-    //                 .push(
-    //                     Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
-    //                         .width(Length::Fill)
-    //                         .on_press(Message::OkButtonPressed),
-    //                 ),
-    //         )
-    //         .max_width(300.0)
-    //         //.width(Length::Shrink)
-    //         .on_close(Message::CloseModal)
-    //         .into()
-    //     })
-    //     .backdrop(Message::CloseModal)
-    //     .on_esc(Message::CloseModal);
-    // }
-    
 }
 
 pub fn main() {
