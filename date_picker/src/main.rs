@@ -162,8 +162,13 @@ impl Sandbox for CalendarApp {
                             state.date.month = state.date.month + 1;
                         }
                     }
-                    Message::TitleInputChanged(_) => {},
+                    Message::TitleInputChanged(value) => {
+                        state.input_value = value;
+                    },
                     Message::CreateEvent => {
+                        if !state.input_value.is_empty() {
+                            state.input_value.clear();
+                        }
                         //create event 
                         state.show_modal = false;
                     },
@@ -316,13 +321,6 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
         row![
             // horizontal_space(Length::Fill),
             row![
-                month_text,
-                year_text,
-            ]
-            .width(Length::Fill)
-            .align_items(Alignment::Center),
-            horizontal_space(Length::Fill),
-            row![
                 Modal::new(show_modal, create_event_btn, move ||  {
                         Card::new(
                             Text::new("My modal"),
@@ -331,6 +329,8 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
                                 &input_value,
                                 Message::TitleInputChanged,
                             )
+                            .on_submit(Message::CreateEvent),
+                            
                         )
                         .foot(
                             Row::new()
@@ -349,7 +349,6 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
                                 ),
                         )
                         .max_width(300.0)
-                        // .width(Length::Shrink)
                         .on_close(Message::CloseModal)
                         .into()
                     }
@@ -359,10 +358,15 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
                 // .into()
             ]
             .width(Length::Fill)
-            .align_items(Alignment::Center)
-        
-            ,
-            horizontal_space(Length::Fill)
+            .align_items(Alignment::Center),
+            horizontal_space(Length::Fill),
+            row![
+                month_text,
+                year_text,
+            ]
+            .width(Length::Fill)
+            .align_items(Alignment::Center),
+            horizontal_space(Length::Fill),
         ]
         .width(Length::Fill)
         .align_items(Alignment::Center),
