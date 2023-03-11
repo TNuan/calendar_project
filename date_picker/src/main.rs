@@ -1,4 +1,6 @@
 
+use std::sync::Arc;
+
 use chrono::prelude::*;
 use iced::{
     alignment,
@@ -8,6 +10,8 @@ use iced::{
 use iced_native::{Layout, renderer::BorderRadius, widget::scrollable::style};
 
 use iced_aw::{Card, Modal};
+use iced_aw::{date_picker::Date as DateModal, DatePicker};
+
 use serde::{Deserialize, Serialize};
 
 
@@ -85,9 +89,11 @@ struct State {
     date: Date,
     events: Vec<Event>,
     show_modal: bool,
+    show_picker: bool,
     saving: bool,
     dirty: bool,
     input_value: String,
+    picked_date: DateModal,
 }
 
 
@@ -114,6 +120,10 @@ enum Message {
     CreateEvent,
     OpenModal,
     CloseModal,
+    // MessageDatepicker(MessageDatepicker),
+    ChooseDate,
+    SubmitDate(DateModal),
+    CancelDate,
     EventMessage(usize, EventMessage),
     NextMonth,
     PrevMonth,
@@ -137,9 +147,11 @@ impl Sandbox for CalendarApp {
             date: Date::today(),
             events: vec![],
             show_modal: false,
+            show_picker: false,
             saving: true,
             dirty: false,
             input_value: String::from(""),
+            picked_date: DateModal::today(),
         })
     }
 
@@ -162,8 +174,13 @@ impl Sandbox for CalendarApp {
                             state.date.month = state.date.month + 1;
                         }
                     }
-                    Message::TitleInputChanged(_) => {},
+                    Message::TitleInputChanged(value) => {
+                        state.input_value = value;
+                    },
                     Message::CreateEvent => {
+                        if !state.input_value.is_empty() {
+                            state.input_value.clear();
+                        }
                         //create event 
                         state.show_modal = false;
                     },
@@ -172,6 +189,18 @@ impl Sandbox for CalendarApp {
                     },
                     Message::CloseModal => {
                         state.show_modal = false;
+                    },
+                    Message::ChooseDate => {
+                        state.show_picker = true;
+                        print!("check : {}", state.show_picker);
+                        // state.show_modal = false;
+                    },
+                    Message::SubmitDate(picked_date) => {
+                        state.picked_date = picked_date;
+                        state.show_picker = false;
+                    },
+                    Message::CancelDate => {
+                        state.show_picker = false;
                     },
                     Message::EventMessage(_, _) => todo!(),
                     Message::PrevMonth => {
@@ -190,7 +219,17 @@ impl Sandbox for CalendarApp {
     fn view(&self) -> Element<Message> {
         match self {
             CalendarApp::Loading => loading_message(),
-            CalendarApp::Loaded(State { date, events, show_modal, input_value,  .. }) => {
+            CalendarApp::Loaded(State 
+                { 
+                    date, 
+                    events, 
+                    show_modal,
+                    show_picker,  
+                    input_value,
+                    picked_date,  
+                    .. 
+                }
+            ) => {
                 let dt = Utc.ymd(date.year, date.month, date.day);
 
                 let month_start_day = Utc.ymd(date.year, date.month, 1).weekday().num_days_from_sunday();
@@ -219,7 +258,7 @@ impl Sandbox for CalendarApp {
                     .width(Length::Fill)
                     .horizontal_alignment(alignment::Horizontal::Center);
 
-                let header = view_controls(month_text, year_text, *show_modal, input_value.to_string());
+                let header = view_controls(month_text, year_text, *show_modal, *show_picker, input_value.to_string(), *picked_date );
 
                 // Create a header for the weekdays name
                 let mut weekday = Row::new();
@@ -305,7 +344,7 @@ impl Sandbox for CalendarApp {
     }
 }
 
-fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool, input_value: String,) -> Element<'a, Message> {
+fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool, show_picker: bool, input_value: String, picked_date: DateModal) -> Element<'a, Message> {
     let create_event_btn = Container::new(
         Row::new()
             .spacing(10)
@@ -316,21 +355,30 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
         row![
             // horizontal_space(Length::Fill),
             row![
-                month_text,
-                year_text,
-            ]
-            .width(Length::Fill)
-            .align_items(Alignment::Center),
-            horizontal_space(Length::Fill),
-            row![
                 Modal::new(show_modal, create_event_btn, move ||  {
                         Card::new(
-                            Text::new("My modal"),
-                            text_input(
-                                "What needs to be done?",
-                                &input_value,
-                                Message::TitleInputChanged,
-                            )
+                            Text::new("Create a new event"),
+                            column![
+                                text_input(
+                                    "What needs to be done?",
+                                    &input_value,
+                                    Message::TitleInputChanged,
+                                )
+                                .on_submit(Message::CreateEvent),
+                                row![
+                                    DatePicker::new(
+                                        show_picker,
+                                        picked_date,
+                                        button("Set Date").style(theme::Button::Text).on_press(Message::ChooseDate),
+                                        Message::CancelDate,
+                                        Message::SubmitDate,
+                                    ),
+                                    text(format!("Date: {}", picked_date))
+                                ]
+                                .align_items(alignment::Alignment::Center)
+                                .spacing(10)
+                            ]
+                            .spacing(10)
                         )
                         .foot(
                             Row::new()
@@ -346,23 +394,36 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
                                     Button::new(Text::new("Ok").horizontal_alignment(alignment::Horizontal::Center))
                                         .width(Length::Fill)
                                         .on_press(Message::CreateEvent),
-                                ),
+                                )
                         )
                         .max_width(300.0)
-                        // .width(Length::Shrink)
                         .on_close(Message::CloseModal)
                         .into()
                     }
                 )
                 .backdrop(Message::CloseModal)
-                .on_esc(Message::CloseModal)
+                .on_esc(Message::CloseModal),
                 // .into()
+
+                // DatePicker::new(
+                //     show_picker,
+                //     picked_date,
+                //     button("Set Date").style(theme::Button::Text).on_press(Message::ChooseDate),
+                //     Message::CancelDate,
+                //     Message::SubmitDate,
+                // ),
+                // text(format!("Date: {}", picked_date))
             ]
             .width(Length::Fill)
-            .align_items(Alignment::Center)
-        
-            ,
-            horizontal_space(Length::Fill)
+            .align_items(Alignment::Center),
+            horizontal_space(Length::Fill),
+            row![
+                month_text,
+                year_text,
+            ]
+            .width(Length::Fill)
+            .align_items(Alignment::Center),
+            horizontal_space(Length::Fill),
         ]
         .width(Length::Fill)
         .align_items(Alignment::Center),
@@ -384,6 +445,10 @@ fn view_controls<'a>(month_text: Text<'a>, year_text: Text<'a>, show_modal: bool
 pub fn main() {
     <CalendarApp as Sandbox>::run(Settings::default());
 }
+
+
+////////////////////////////////////////////////////////////////
+
 
 fn loading_message<'a>() -> Element<'a, Message> {
     container(
